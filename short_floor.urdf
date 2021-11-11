@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<robot name="flat_terrain">
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.068" />
+      <inertia ixx="0.0000408" ixy="0" ixz="0" iyy="0.0000408" iyz="0"
+          izz="0.0000408" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.005" rpy="0 0 0" />
+      <geometry>
+        <box size="8 8 0.01" />
+      </geometry>
+      <material name="desert sand">
+        <color rgba="0.9297 0.7930 0.6758 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0.005" rpy="0 0 0" />
+      <geometry>
+        <box size="8 8 0.01" />
+      </geometry>
+    </collision>
+  </link>
+</robot>
