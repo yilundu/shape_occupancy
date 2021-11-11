@@ -108,6 +108,9 @@ if __name__ == "__main__":
 
     # create pointcloud from data
     pointcloud = load_pointcloud(data)[None, :, :].float().cuda()
+    import pdb
+    pdb.set_trace()
+    print(pointcloud)
 
     # Scale pointcloud when passing into model
     pointcloud = pointcloud * 10.
