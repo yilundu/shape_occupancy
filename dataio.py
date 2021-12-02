@@ -9,6 +9,8 @@ from skimage.transform import resize
 from scipy.spatial.transform import Rotation
 import pickle
 import geometry
+import matplotlib.pyplot as plt
+import util
 
 
 class OccTrainDataset(Dataset):
@@ -1078,17 +1080,16 @@ class BottleOccTrainDataset(Dataset):
     def __getitem__(self, index):
         return self.get_item(index)
 
-
 class JointOccTrainDataset(Dataset):
 
     def __init__(self, sidelength, depth_aug=False, multiview_aug=False, phase='train'):
 
         # Path setup
         # self.root = "/data/scratch/asimeonov/repos/research/PIFU_robot/data_gen/data/mug_table_upright_pose_4_cam_half_occ_full_rand_scale"
-        mug_path = "/data/scratch/asimeonov/repos/research/PIFU_robot/data_gen/data/mug_table_all_pose_4_cam_half_occ_full_rand_scale"
-        bottle_path = "/data/scratch/asimeonov/repos/research/PIFU_robot/data_gen/data/bottle_table_all_pose_4_cam_half_occ_full_rand_scale"
-        bowl_path = "/scratch/anthony/repos/research/PIFU_robot/data_gen/data/bowl_table_all_pose_4_cam_half_occ_full_rand_scale"
-        paths = [mug_path, bottle_path, bowl_path]
+        mug_path = "/media/jiahui/JIAHUI/obj_data/sim/train"
+        # bottle_path = "/data/scratch/asimeonov/repos/research/PIFU_robot/data_gen/data/bottle_table_all_pose_4_cam_half_occ_full_rand_scale"
+        # bowl_path = "/scratch/anthony/repos/research/PIFU_robot/data_gen/data/bowl_table_all_pose_4_cam_half_occ_full_rand_scale"
+        paths = [mug_path]#, bottle_path, bowl_path]
 
         files_total = []
         for path in paths:
@@ -1116,11 +1117,13 @@ class JointOccTrainDataset(Dataset):
         self.bs = bs
         self.hbs = hbs
 
-        self.shapenet_mug_dict = pickle.load(open("shapenet_mug.p", "rb"))
-        self.shapenet_bowl_dict = pickle.load(open("shapenet_bowl.p", "rb"))
-        self.shapenet_bottle_dict = pickle.load(open("shapenet_bottle.p", "rb"))
+        shapenet_files_path = "/home/jiahui/shape_occupancy/shapenet_files/"
+        self.shapenet_mug_dict = pickle.load(open(shapenet_files_path+"shapenet_mug.p", "rb"))
+        # print("shape dictionary",self.shapenet_mug_dict)
+        # self.shapenet_bowl_dict = pickle.load(open("shapenet_bowl.p", "rb"))
+        # self.shapenet_bottle_dict = pickle.load(open("shapenet_bottle.p", "rb"))
 
-        self.shapenet_dict = {'03797390': self.shapenet_mug_dict, '02880940': self.shapenet_bowl_dict, '02876657': self.shapenet_bottle_dict}
+        self.shapenet_dict = {'03797390': self.shapenet_mug_dict}#, '02880940': self.shapenet_bowl_dict, '02876657': self.shapenet_bottle_dict}
 
         self.projection_mode = "perspective"
 
@@ -1135,153 +1138,92 @@ class JointOccTrainDataset(Dataset):
     def get_item(self, index):
         try:
             data = np.load(self.files[index], allow_pickle=True)
-            posecam =  data['object_pose_cam_frame']
+            depth = data["point_cloud"]
+            # print("depth",depth.shape)
+            if depth.shape[0] <1000: # choose another one
+                return self.get_item(index=random.randint(0, self.__len__() - 1))
 
-            idxs = list(range(posecam.shape[0]))
-            random.shuffle(idxs)
-            select = random.randint(1, 4)
-
-            if self.multiview_aug:
-                idxs = idxs[:select]
-
-            poses = []
-            quats = []
-            for i in idxs:
-                pos = posecam[i, :3]
-                quat = posecam[i, 3:]
-
-                poses.append(pos)
-                quats.append(quat)
+            # 1000 random sampled point clouds from object
+            rix_pcd = np.random.permutation(depth.shape[0])
+            depth_pointcloud = depth[rix_pcd[:1000]]
+            # print("depth pointcloud",rix_pcd.max())
+            if depth_pointcloud.shape[0] != 1000: # choose another one
+                # print("choose another one!")
+                return self.get_item(index=random.randint(0, self.__len__() - 1))
 
             shapenet_id = str(data['shapenet_id'].item())
             category_id = str(data['shapenet_category_id'].item())
-            vertex_offset = data['vertex_offset']
+            obj_pose = data["object_pose_world"]
+            pos = obj_pose[:3]
+            quat = obj_pose[3:]
+            quat_list = [float(quat[0]), float(quat[1]), float(quat[2]), float(quat[3])]
+            rotation_matrix = Rotation.from_quat(quat_list)
+            rotation_matrix = rotation_matrix.as_matrix()
 
-            depths = []
-            segs = []
-            cam_poses = []
-
-            for i in idxs:
-                seg = data['object_segmentation'][i, 0]
-                depth = data['depth_observation'][i]
-                rix = np.random.permutation(depth.shape[0])[:1000]
-                seg = seg[rix]
-                depth = depth[rix]
-
-                if self.depth_aug:
-                    depth = depth + np.random.randn(*depth.shape) * 0.1
-
-                segs.append(seg)
-                depths.append(torch.from_numpy(depth))
-                cam_poses.append(data['cam_pose_world'][i])
-
-            y, x = torch.meshgrid(torch.arange(480), torch.arange(640))
-
-            # Compute native intrinsic matrix
-            sensor_half_width = 320
-            sensor_half_height = 240
-
-            # hor_fov = 60 * np.pi / 180
-            vert_fov = 60 * np.pi / 180
-
-            vert_f = sensor_half_height / np.tan(vert_fov / 2)
-            hor_f = sensor_half_width / (np.tan(vert_fov / 2) * 320 / 240)
-
-            intrinsics = np.array(
-                [[hor_f, 0., sensor_half_width, 0.],
-                 [0., vert_f, sensor_half_height, 0.],
-                 [0., 0., 1., 0.]]
-            )
-
-            # Rescale to new sidelength
-            # intrinsics[:2, :3] *= np.array([128/640, 128/480])[:, None]
+            intrinsics = data["cam_intrinsics"]
             intrinsics = torch.from_numpy(intrinsics)
 
-            dp_nps = []
-
-            for i in range(len(segs)):
-                seg_mask = segs[i]
-                dp_np = geometry.lift(x.flatten()[seg_mask], y.flatten()[seg_mask], depths[i].flatten(), intrinsics[None, :, :])
-                dp_np = torch.cat([dp_np, torch.ones_like(dp_np[..., :1])], dim=-1)
-                dp_nps.append(dp_np)
-
             shapenet_path = "/data/vision/billf/object-properties/dataset/billf-6/ShapeNetCore.v2/"
-
             voxel_path = osp.join(shapenet_path, category_id, shapenet_id, 'models', 'model_normalized_128.mat')
             coord, voxel_bool, voxel_pos = self.shapenet_dict[category_id][voxel_path]
+            # print("coord complte",coord.shape,voxel_bool.shape,voxel_pos.shape)
 
-            rix = np.random.permutation(coord.shape[0])
+            mask = (voxel_bool == True)[:, 0]
 
-            coord = coord[rix[:1500]]
-            label = voxel_bool[rix[:1500]]
+            coord_pos = coord[mask]
+            coord_neg = coord[~mask]
+            label_pos = voxel_bool[mask]
+            label_neg = voxel_bool[~mask]
+            rix_pos = np.random.permutation(coord_pos.shape[0])
+            rix_neg = np.random.permutation(coord_neg.shape[0])
+            coord_pos = coord_pos[rix_pos[:750]]
+            coord_neg = coord_neg[rix_neg[:750]]
+            label_pos = label_pos[rix_pos[:750]]
+            label_neg = label_neg[rix_neg[:750]]
+            label = np.concatenate([label_pos, label_neg], axis=0)
+            coord = np.concatenate([coord_pos, coord_neg], axis=0)
 
-            offset = np.random.uniform(-self.hbs, self.hbs, coord.shape)
-            coord = coord + offset
-            coord = coord_orig = coord * data['mesh_scale']
-
-            coord = torch.from_numpy(coord)
-
-            transforms = []
-            for quat, pos in zip(quats, poses):
-                quat_list = [float(quat[0]), float(quat[1]), float(quat[2]), float(quat[3])]
-                rotation_matrix = Rotation.from_quat(quat_list)
-                rotation_matrix = rotation_matrix.as_matrix()
-
-                transform = np.eye(4)
-                transform[:3, :3] = rotation_matrix
-                transform[:3, -1] = pos
-                transform = torch.from_numpy(transform)
-                transforms.append(transform)
-
-
-            transform = transforms[0]
-            coord = torch.cat([coord, torch.ones_like(coord[..., :1])], dim=-1)
-            coord = torch.sum(transform[None, :, :] * coord[:, None, :], dim=-1)
-            coord = coord[..., :3]
-
-            dp_np_extra = []
-
-            for i, dp_np in enumerate(dp_nps):
-                point_transform = torch.matmul(transform, torch.inverse(transforms[i]))
-                dp_np = torch.sum(point_transform[None, :, :] * dp_np[:, None, :], dim=-1)
-                dp_np_extra.append(dp_np[..., :3])
-
-            depth_coords = torch.cat(dp_np_extra, dim=0)
-
-            rix = torch.randperm(depth_coords.size(0))
-            depth_coords = depth_coords[rix[:1000]]
-
-            if depth_coords.size(0) != 1000:
-                return self.get_item(index=random.randint(0, self.__len__() - 1))
+            # offset = np.random.uniform(-self.hbs, self.hbs, coord.shape)
+            coord = coord #+ offset
+            mesh_scale = 0.5 #data['mesh_scale']
+            coord = coord_orig = coord * mesh_scale
+            coord = np.matmul(rotation_matrix,coord.T).T+pos.reshape((-1,3))
 
             label = (label - 0.5) * 2.0
-            # center = (depth_coords.min(dim=0)[0] + depth_coords.max(dim=0)[0]) / 2.
-            center = depth_coords.mean(dim=0)
+            center = np.mean(depth_pointcloud,axis=0)
+            # print("center:",center)
             coord = coord - center[None, :]
-            depth_coords = depth_coords - center[None, :]
+            depth_pointcloud = depth_pointcloud-center
 
-            all_coords = coord
+            # #viz
+            # fig = plt.figure()
+            # ax = fig.add_subplot(projection='3d')
+            # # For each set of style and range settings, plot n random points in the box
+            # # defined by x in [23, 32], y in [0, 100], z in [zlow, zhigh].
+            # ax.scatter(depth_pointcloud[:,0], depth_pointcloud[:,1], depth_pointcloud[:,2], marker='o')
+            # ax.scatter(coord[:,0], coord[:,1], coord[:,2], marker='^')
+            # ax.set_xlabel('X Label')
+            # ax.set_ylabel('Y Label')
+            # ax.set_zlabel('Z Label')
+            #
+            # plt.show()
+
+
             labels = label
-
-            # if 'point_cloud' in data.files:
-            #     gt_pointcloud = data['point_cloud']
-            #     if gt_pointcloud.shape[0] >= 1000:
-            #         gt_pointcloud = torch.from_numpy(gt_pointcloud)
-            #         gt_pcd_idx = torch.randperm(gt_pointcloud.size(0))
-            #         gt_pointcloud = gt_pointcloud[gt_pcd_idx[:1000]]
-            #     else:
-            #         gt_pointcloud = torch.rand(1000, 3)
-            # else:
             gt_pointcloud = torch.rand(1000, 3)
 
-            res = {'depth_coords': depth_coords.float(),
-                   'coords': coord.float(),
+            res = {'depth_coords': torch.from_numpy(depth_pointcloud).float(),
+                   'coords': torch.from_numpy(coord).float(),
                    'intrinsics':intrinsics.float(),
                    'pointcloud': gt_pointcloud.float(),
                    'cam_poses': np.zeros(1)}
+            # print("depth+coord",depth_coords,depth_coords.shape)
+            # print("coords",coord,coord.shape)
+            # print("intriincs",intrinsics)
             return res, {'occ': torch.from_numpy(labels).float()}
 
         except Exception as e:
+            # print("errorr!")
             print(e)
             # print(file)
             return self.get_item(index=random.randint(0, self.__len__() - 1))

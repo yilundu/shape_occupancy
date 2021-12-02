@@ -4,11 +4,11 @@ from glob import glob
 import numpy as np
 import geometry
 from scipy.spatial.transform import Rotation
-import open3d as o3d
-from matplotlib import pyplot as plt
 
 def load_pointcloud(data):
+    print("data",data)
     posecam =  data['object_pose_cam_frame']
+    print("posecam", posecam.shape)
     idxs = list(range(posecam.shape[0]))
 
     segs = []
@@ -26,13 +26,16 @@ def load_pointcloud(data):
 
     # Process and obtain the depth map / segmentation of each object
     for i in idxs:
+        print("segobj", data['object_segmentation'].shape)
         seg = data['object_segmentation'][i, 0]
+        print("seg",seg,seg.shape,type(seg))
         depth = data['depth_observation'][i]
+        print("Depth",depth.shape,seg.shape)
 
         rix = np.random.permutation(depth.shape[0])[:1000]
         seg = seg[rix]
-        depth = depth[rix]
 
+        depth = depth[rix]
         segs.append(seg)
         depths.append(torch.from_numpy(depth))
 
@@ -60,6 +63,7 @@ def load_pointcloud(data):
     dp_nps = []
     for i in range(len(segs)):
         seg_mask = segs[i]
+        print("seg mask",seg_mask,seg_mask.shape,x.flatten()[seg_mask].shape)
         dp_np = geometry.lift(x.flatten()[seg_mask], y.flatten()[seg_mask], depths[i].flatten(), intrinsics[None, :, :])
         dp_np = torch.cat([dp_np, torch.ones_like(dp_np[..., :1])], dim=-1)
         dp_nps.append(dp_np)
@@ -84,74 +88,48 @@ def load_pointcloud(data):
     # Convert each depth camera to camera coordinates
     for i, dp_np in enumerate(dp_nps):
         point_transform = torch.matmul(transform, torch.inverse(transforms[i]))
+        print("dp_np",dp_np,dp_np.shape)
         dp_np = torch.sum(point_transform[None, :, :] * dp_np[:, None, :], dim=-1)
+        # print("dp_np",dp_np,dp_np.shape)
         dp_np_extra.append(dp_np[..., :3])
 
     depth_coords = torch.cat(dp_np_extra, dim=0)
 
     rix = torch.randperm(depth_coords.size(0))
     depth_coords = depth_coords[rix[:1000]]
-
+    print("depth coords b4",depth_coords.shape, depth_coords.min(dim=0), depth_coords.max(dim=0))
     center = (depth_coords.min(dim=0)[0] + depth_coords.max(dim=0)[0]) / 2.
+    print("center",center)
     # Center depth coordinates
     depth_coords = depth_coords - center[None, :]
+    print("depth coords af",depth_coords.shape, depth_coords.min(dim=0)[0], depth_coords.max(dim=0)[0])
 
     return depth_coords
 
-def load_pcd(path):
-    pcd = o3d.io.read_point_cloud(path)
-    points = np.array(pcd.points)
-    max = np.max(points,axis=0)
-    min = np.min(points,axis=0)
-    # print("min,max",min.shape,max.shape)
-    scale_min = np.array([-0.1148,-0.1082,-0.1485])
-    scale_max = (-scale_min).copy()
-    ratio = (max-min)/(scale_max-scale_min)
-    points_scaled = (points-min)/ratio+scale_min
-    o3d.visualization.draw_geometries([pcd])
-    # print("points_scaled",points_scaled.min(axis=0),points_scaled.max(axis=0))
-    return points_scaled
-
-def viz_latent(latent):
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(latent)
-    o3d.visualization.draw_geometries([pcd])
-    min = latent.min(axis=0)
-    max = latent.max(axis=0)
-    ratio = (max-min)/255.
-    latent_rescaled = (latent-min)/ratio
-    plt.imshow(latent_rescaled, interpolation='nearest')
-    plt.show()
-
 if __name__ == "__main__":
     model = vnn_occupancy_network.VNNOccNet(latent_dim=256)#.cuda()
-    ckpt = torch.load("model_current.pth")
+    ckpt = torch.load("model_current.pth",map_location=torch.device('cpu'))
     model.load_state_dict(ckpt)
-   # model.cuda()
+    #model.cuda()
 
-    # demo_path = "data.npz"
-    # data = np.load(demo_path, allow_pickle=True)
+    demo_path = "data.npz"
+    data = np.load(demo_path, allow_pickle=True)
+    print("data",data)
 
-    for index in range(1,8):
-        # index
-        pcd_path = "/home/jiahui/OBJ_SLAM"+"/"+str(index)+".pcd"
-        data = torch.from_numpy(load_pcd(pcd_path),map_location=torch.device('cpu'))
     # create pointcloud from data
-    pointcloud = data[None, :, :].float()#.cuda()
-    # pointcloud = load_pointcloud(data)[None, :, :].float().cuda()
+    pointcloud = load_pointcloud(data)[None, :, :].float()#.cuda()
     # import pdb
     # pdb.set_trace()
+    # print(pointcloud)
 
     # Scale pointcloud when passing into model
     pointcloud = pointcloud * 10.
-    latent = model.encoder(pointcloud).cpu().detach().numpy()
-    latent_shape = (latent * latent).sum(dim=-1)
-    viz_latent(latent[0,:])
-    print("latent",latent.shape,latent[0,:].min(axis=0),latent[0,:].max(axis=0))
+    print("depth coords",pointcloud,pointcloud.shape)
+
+    latent = model.encoder(pointcloud)
+
     # import pdb
     # pdb.set_trace()
     # print(latent)
-
-
 
     # example loading of the data

@@ -21,7 +21,7 @@ def occupancy(model, model_input, ground_truth, model_output, writer, iter, pref
     # pixel_coords = model_output['pixel_coords']
 
     writer.add_image(prefix + "gt_depth",
-                    torchvision.utils.make_grid(depth[:, :1].repeat(1, 3, 1, 1),
+                     torchvision.utils.make_grid(depth[:, :1].repeat(1, 3, 1, 1),
                                                  scale_each=True,
                                                  normalize=True).cpu().detach().numpy(),
                      iter)
@@ -134,7 +134,7 @@ def semantic(model, model_input, ground_truth, model_output, writer, iter, prefi
     depth = model_input['depth']
 
     writer.add_image(prefix + "input_depth",
-                torchvision.utils.make_grid(depth[:, :1].repeat(1, 3, 1, 1),
+                     torchvision.utils.make_grid(depth[:, :1].repeat(1, 3, 1, 1),
                                                  scale_each=True,
                                                  normalize=True).cpu().detach().numpy(),
                      iter)
@@ -239,6 +239,7 @@ def semantic_occupancy(model, model_input, ground_truth, model_output, writer, i
 
     writer.add_figure(prefix + 'pred_occupancies', fig, global_step=iter)
 
+
 def point_cloud(writer, iter, name, points_xyz, colors=None):
     point_size_config = {
         'material': {
@@ -248,7 +249,7 @@ def point_cloud(writer, iter, name, points_xyz, colors=None):
     }
 
     if colors is None:
-       colors = np.zeros_like(points_xyz)
+        colors = np.zeros_like(points_xyz)
 
     writer.add_mesh(name, vertices=points_xyz, colors=colors,
-                     config_dict={"material": point_size_config}, global_step=iter)
+                    config_dict={"material": point_size_config}, global_step=iter)

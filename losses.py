@@ -28,7 +28,6 @@ def distance_net(model_outputs, ground_truth, val=False):
 
     return loss_dict
 
-
 def semantic(model_outputs, ground_truth, val=False):
     loss_dict = {}
 
