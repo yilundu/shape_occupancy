@@ -12,6 +12,9 @@ from collections import defaultdict
 import torch.distributed as dist
 import util
 
+def cond_mkdir(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
 
 def average_gradients(model):
     """Averages gradients across workers"""
@@ -42,7 +45,7 @@ def multiscale_training(model, lr, steps_til_summary, epochs_til_checkpoint, mod
 def train(model, train_dataloader, epochs, lr, steps_til_summary, epochs_til_checkpoint, model_dir, loss_fn,
           summary_fn=None, iters_til_checkpoint=None, val_dataloader=None, clip_grad=False, val_loss_fn=None,
           overwrite=True, optimizers=None, batches_per_validation=10, gpus=1, rank=0, max_steps=None):
-
+    print("enter training!")
     if optimizers is None:
         optimizers = [torch.optim.Adam(lr=lr, params=model.parameters())]
 
@@ -61,10 +64,11 @@ def train(model, train_dataloader, epochs, lr, steps_til_summary, epochs_til_che
         os.makedirs(model_dir)
 
         summaries_dir = os.path.join(model_dir, 'summaries')
-        util.cond_mkdir(summaries_dir)
+        cond_mkdir(summaries_dir)
+
 
         checkpoints_dir = os.path.join(model_dir, 'checkpoints')
-        util.cond_mkdir(checkpoints_dir)
+        cond_mkdir(checkpoints_dir)
 
         writer = SummaryWriter(summaries_dir)
 
@@ -79,9 +83,10 @@ def train(model, train_dataloader, epochs, lr, steps_til_summary, epochs_til_che
                            np.array(train_losses))
 
             for step, (model_input, gt) in enumerate(train_dataloader):
+                # print("util",util)
                 model_input = util.dict_to_gpu(model_input)
                 gt = util.dict_to_gpu(gt)
-
+                # print("gt",gt)
                 start_time = time.time()
 
                 model_output = model(model_input)
@@ -165,10 +170,11 @@ def train(model, train_dataloader, epochs, lr, steps_til_summary, epochs_til_che
             if max_steps is not None and total_steps==max_steps:
                 break
 
-        torch.save(model.state_dict(),
-                   os.path.join(checkpoints_dir, 'model_final.pth'))
-        np.savetxt(os.path.join(checkpoints_dir, 'train_losses_final.txt'),
-                   np.array(train_losses))
+        if rank == 0:
+            torch.save(model.state_dict(),
+                       os.path.join(checkpoints_dir, 'model_final.pth'))
+            np.savetxt(os.path.join(checkpoints_dir, 'train_losses_final.txt'),
+                       np.array(train_losses))
 
         return model, optimizers
 

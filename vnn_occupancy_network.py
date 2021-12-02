@@ -11,7 +11,6 @@ def meanpool(x, dim=-1, keepdim=False):
     out = x.mean(dim=dim, keepdim=keepdim)
     return out
 
-
 class VNNOccNet(nn.Module):
     def __init__(self,
                  latent_dim,
@@ -34,7 +33,7 @@ class VNNOccNet(nn.Module):
         query_points = input['coords'] * 10
 
         z = self.encoder(enc_in)
-
+        out_dict['z'] = z
         if self.return_features:
             out_dict['occ'], out_dict['features'] = self.decoder(query_points, z)
         else:

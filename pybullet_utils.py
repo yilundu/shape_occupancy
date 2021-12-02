@@ -523,23 +523,23 @@ def get_urdf_flags(cache=False, cylinder=False):
 
 def load_pybullet(filename, fixed_base=False, scale=1., **kwargs):
     # fixed_base=False implies infinite base mass
-    with LockRenderer():
-        if filename.endswith('.urdf'):
-            flags = get_urdf_flags(**kwargs)
-            body = p.loadURDF(filename, useFixedBase=fixed_base, flags=flags,
-                              globalScaling=scale, physicsClientId=CLIENT)
-        elif filename.endswith('.sdf'):
-            body = p.loadSDF(filename, physicsClientId=CLIENT)
-        elif filename.endswith('.xml'):
-            body = p.loadMJCF(filename, physicsClientId=CLIENT)
-        elif filename.endswith('.bullet'):
-            body = p.loadBullet(filename, physicsClientId=CLIENT)
-        elif filename.endswith('.obj'):
-            # TODO: fixed_base => mass = 0?
-            body = create_obj(filename, scale=scale, **kwargs)
-        else:
-            raise ValueError(filename)
-    INFO_FROM_BODY[CLIENT, body] = ModelInfo(None, filename, fixed_base, scale)
+    # with LockRenderer():
+    if filename.endswith('.urdf'):
+        flags = get_urdf_flags(**kwargs)
+        body = p.loadURDF(filename, useFixedBase=fixed_base, flags=flags,
+                          globalScaling=scale, physicsClientId=CLIENT)
+    elif filename.endswith('.sdf'):
+        body = p.loadSDF(filename, physicsClientId=CLIENT)
+    elif filename.endswith('.xml'):
+        body = p.loadMJCF(filename, physicsClientId=CLIENT)
+    elif filename.endswith('.bullet'):
+        body = p.loadBullet(filename, physicsClientId=CLIENT)
+    elif filename.endswith('.obj'):
+        # TODO: fixed_base => mass = 0?
+        body = create_obj(filename, scale=scale, **kwargs)
+    else:
+        raise ValueError(filename)
+        INFO_FROM_BODY[CLIENT, body] = ModelInfo(None, filename, fixed_base, scale)
     return body
 
 def set_caching(cache):
@@ -3176,7 +3176,7 @@ def plan_base_motion(body, end_conf, base_limits, obstacles=[], direct=False,
 def stable_z_on_aabb(body, aabb):
     center, extent = get_center_extent(body)
     _, upper = aabb
-    return (upper + extent/2 + (get_point(body) - center))[2]
+    return (upper + extent/2+ (get_point(body) - center))[2]
 
 def stable_z(body, surface, surface_link=None):
     return stable_z_on_aabb(body, get_aabb(surface, link=surface_link))
