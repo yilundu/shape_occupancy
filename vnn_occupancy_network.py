@@ -79,6 +79,11 @@ class VNN_ResnetPointnet(nn.Module):
 
     def forward(self, p):
         batch_size = p.size(0)
+        p_mean = p.mean(dim=-2)
+
+        # Center points
+        p = p - p_mean[..., None, :]
+
         p = p.unsqueeze(1).transpose(2, 3)
         #mean = get_graph_mean(p, k=self.k)
         #mean = p_trans.mean(dim=-1, keepdim=True).expand(p_trans.size())
@@ -110,6 +115,7 @@ class VNN_ResnetPointnet(nn.Module):
         net = self.pool(net, dim=-1)
 
         c = self.fc_c(self.actvn_c(net))
+        c = c.view(batch_size, -1, 3) + p_mean[..., None, :]
 
         if self.meta_output == 'invariant_latent':
             c_std, z0 = self.std_feature(c)
@@ -178,6 +184,9 @@ class DecoderInner(nn.Module):
 
         if self.z_dim != 0:
             z = z.view(batch_size, -1, D).contiguous()
+            z_mean = z.mean(dim=-2)[:, None, :]
+            p = p - z_mean
+
             net_z = torch.einsum('bmi,bni->bmn', p, z)
             z_dir = self.z_in(z)
             z_inv = (z * z_dir).sum(-1).unsqueeze(1).repeat(1, T, 1)

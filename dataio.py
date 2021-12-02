@@ -1256,9 +1256,9 @@ class JointOccTrainDataset(Dataset):
 
             label = (label - 0.5) * 2.0
             # center = (depth_coords.min(dim=0)[0] + depth_coords.max(dim=0)[0]) / 2.
-            center = depth_coords.mean(dim=0)
-            coord = coord - center[None, :]
-            depth_coords = depth_coords - center[None, :]
+            # center = depth_coords.mean(dim=0)
+            # coord = coord - center[None, :]
+            # depth_coords = depth_coords - center[None, :]
 
             all_coords = coord
             labels = label
