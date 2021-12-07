@@ -85,11 +85,15 @@ def train(model, train_dataloader, epochs, lr, steps_til_summary, epochs_til_che
             for step, (model_input, gt) in enumerate(train_dataloader):
                 # print("util",util)
                 model_input = util.dict_to_gpu(model_input)
+                # print("model input",model_input)
+                pcd = model_input["pointcloud"]
+                print("avg",torch.min(pcd,dim=0,keepdim=True),torch.max(pcd,dim=0,keepdim=True))
                 gt = util.dict_to_gpu(gt)
                 # print("gt",gt)
                 start_time = time.time()
 
                 model_output = model(model_input)
+                # print("model output, gt", gt.shape)
                 losses = loss_fn(model_output, gt)
                 # losses = loss_fn(model_output, gt, model_input, model)
 

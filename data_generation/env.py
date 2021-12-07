@@ -185,6 +185,33 @@ def apply_noise_to_depth(depth, seg, obj_id, std, rate=0.00025):
         flat_depth[obj_inds[0][:len(new_depth)]] = new_depth
 
         return flat_depth.reshape(s)
+
+def get_mesh_scale(rand_scale=True):
+    scale_high= 0.4
+    scale_low = 0.2
+    scale_default = 0
+    rand_val = lambda high, low: np.random.random() * (high - low) + low
+    if rand_scale:
+        # mesh_scale=[np.random.random() * (scale_high - scale_low) + scale_low] * 3
+        val1 = rand_val(scale_high, scale_low)
+        val2 = rand_val(scale_high, scale_low)
+        val3 = rand_val(scale_high, scale_low)
+        sample = np.random.randint(5)
+        if sample == 0:
+            mesh_scale = [val1] * 3
+        elif sample == 1:
+            mesh_scale = [val1] * 2 + [val2]
+        elif sample == 2:
+            mesh_scale = [val1] + [val2] * 2
+        elif sample == 3:
+            mesh_scale = [val1, val2, val1]
+        elif sample == 4:
+            mesh_scale = [val1, val2, val3]
+    else:
+        mesh_scale=[scale_default] * 3
+    # print("mesh scale",mesh_scale,sample)
+    return mesh_scale
+
 if __name__ == "__main__":
     # start physics server
     # connect()
@@ -202,9 +229,9 @@ if __name__ == "__main__":
     if(os.path.exists(path)):
         os.remove(path)
     # file_obj = open(path,"w")
-    pClient = p.connect(p.DIRECT)#p.GUI)#
+    pClient = p.connect(p.GUI)#p.DIRECT)#
     p.setGravity(0,0,0)
-    type = "train"
+    type = "test"#"train"
     obj_list = load_obj(type)
     # Load floor
     floor = p.loadURDF("short_floor.urdf", useFixedBase=1)#,basePosition=[0,0,0])
@@ -230,21 +257,25 @@ if __name__ == "__main__":
          [0., vert_f, sensor_half_height, 0.],
          [0., 0., 1., 0.]]
         )
-
     len_list = len(obj_list)
-    mesh_scale=0.5
-    ratio = 0.1 # subset
-    print("ratio",int(ratio*len_list),len_list,obj_list[0])
-    for mug_id in [obj_list[0]]:
+    # ratio = 0.1 # subset
+    # print("ratio",int(ratio*len_list),len_list,obj_list[0])
+    for mug_id in obj_list:
+        mesh_scale = get_mesh_scale()
+        # continue
+        # print("mesh_scale",mesh_scale,mug_id)
+        # print("mesh_scale",mesh_scale,mug_id)
         mug_friend = np.random.randint(0,len_list,size=np.array(1))
         # print("mug",mug_id,mug_friend)
         obj_table_list = [mug_id,obj_list[mug_friend[0]]]#,"1ea9ea99ac8ed233bf355ac8109b9988_model_128_df"]#,"3c0467f96e26b8c6a93445a1757adf6_model_128_df_dec","6faf1f04bde838e477f883dde7397db2_model_128_df_dec"]
         mugs = []
         obj_pose = np.zeros((len(obj_table_list),7))
+        # mesh_scale=0.5
+        mesh_scale_list = [mesh_scale,get_mesh_scale()]
         for k in range(len(obj_table_list)):
             obj = obj_table_list[k]
             while True:
-                mug = load_pybullet("/home/jiahui/shape_occupancy/model/mug_centered_obj/"+obj+"_model_128_df.obj", scale=mesh_scale)
+                mug = load_pybullet("/home/jiahui/shape_occupancy/model/mug_centered_obj/"+obj+"_model_128_df.obj", scale=mesh_scale_list[k])
                 x,y = get_random_location(table)
                 yaw = np.pi / 2 + np.pi * random.random()
                 set_pose(mug, Pose(Point(x=x, y=y, z=stable_z(mug,table)), Euler(roll=np.pi/2,yaw=yaw)))  #critical, can't be removed
@@ -271,7 +302,7 @@ if __name__ == "__main__":
         roll_dim=10
         z_dim= 8
         cam_location = gen_traj(obj_pose[0,0:3],radius_dim,roll_dim,z_dim)
-        save_path= "/media/jiahui/JIAHUI/obj_data/sim/"+type+"/"
+        save_path= "/media/jiahui/JIAHUI/obj_data/sim/"+type+"_rand_scale/"
 
         for i in range(cam_location.shape[0]):
             location = cam_location[i,:]
@@ -340,8 +371,8 @@ if __name__ == "__main__":
             # ax.set_zlabel('Z Label')
             #
             # plt.show()
-
             np.savez(save_path+str(mug_id)+"_"+str(i),
+                        mesh_scale = mesh_scale,
                         cam_pose_world=transform,
                         cam_intrinsics=cam_intrinsics,
                         object_pose_world=obj_pose[0,:],

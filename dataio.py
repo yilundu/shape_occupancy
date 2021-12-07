@@ -1086,7 +1086,7 @@ class JointOccTrainDataset(Dataset):
 
         # Path setup
         # self.root = "/data/scratch/asimeonov/repos/research/PIFU_robot/data_gen/data/mug_table_upright_pose_4_cam_half_occ_full_rand_scale"
-        mug_path = "/media/jiahui/JIAHUI/obj_data/sim/train"
+        mug_path = "/media/jiahui/JIAHUI/obj_data/sim/train_rand_scale"
         # bottle_path = "/data/scratch/asimeonov/repos/research/PIFU_robot/data_gen/data/bottle_table_all_pose_4_cam_half_occ_full_rand_scale"
         # bowl_path = "/scratch/anthony/repos/research/PIFU_robot/data_gen/data/bowl_table_all_pose_4_cam_half_occ_full_rand_scale"
         paths = [mug_path]#, bottle_path, bowl_path]
@@ -1094,6 +1094,8 @@ class JointOccTrainDataset(Dataset):
         files_total = []
         for path in paths:
             files = list(sorted(glob.glob(path+"/*.npz")))
+            random.shuffle(files)
+            # print("files",files)
             n = len(files)
             idx = int(0.9 * n)
 
@@ -1110,7 +1112,7 @@ class JointOccTrainDataset(Dataset):
         self.depth_aug = depth_aug
         self.multiview_aug = multiview_aug
 
-        block = 64
+        block = 128#64
         bs = 1 / block
         hbs = bs * 0.5
         y, z, x = np.meshgrid(np.linspace(-.5+hbs, .5-hbs, block), np.linspace(-.5+hbs, .5-hbs, block), np.linspace(-.5+hbs, .5-hbs, block))
@@ -1183,20 +1185,20 @@ class JointOccTrainDataset(Dataset):
             label = np.concatenate([label_pos, label_neg], axis=0)
             coord = np.concatenate([coord_pos, coord_neg], axis=0)
 
-            # offset = np.random.uniform(-self.hbs, self.hbs, coord.shape)
-            coord = coord #+ offset
-            mesh_scale = 0.5 #data['mesh_scale']
+            offset = np.random.uniform(-self.hbs, self.hbs, coord.shape)
+            coord = coord + offset
+            mesh_scale = data['mesh_scale']
             coord = coord_orig = coord * mesh_scale
             coord = np.matmul(rotation_matrix,coord.T).T+pos.reshape((-1,3))
 
             label = (label - 0.5) * 2.0
 
-            center = np.mean(depth_pointcloud,axis=0)
+            # center = np.mean(depth_pointcloud,axis=0)
             # print("center:",center)
             coord = coord # - center[None, :]
             depth_pointcloud = depth_pointcloud# -center
 
-            # #viz
+            # viz
             # fig = plt.figure()
             # ax = fig.add_subplot(projection='3d')
             # # For each set of style and range settings, plot n random points in the box
